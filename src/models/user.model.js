@@ -42,7 +42,7 @@ const userSchema = new Schema(
             type: string,
             required: [true, 'Password is required']
         },
-        referenceToken: {
+        refreshToken: {
             type: String,   //token for resetting password
         }
     },
@@ -53,7 +53,7 @@ const userSchema = new Schema(
 userSchema.pre("save", async function (next) {
     if (!this.isModified("password"))
         return next();
-    this.password = bcrypt.hash(this.password, 10);//encrypting the user's password before saving it into database using bcrypt 
+    this.password = await bcrypt.hash(this.password, 10);//encrypting the user's password before saving it into database using bcrypt 
 })
 //comparing the string password with our encrypted password
 userSchema.methods.isPasswordCorrect = async function (password) {

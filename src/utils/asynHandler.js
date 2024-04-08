@@ -1,7 +1,7 @@
 //making a wrapper db since we need to talk to it often.
 
 const asyncHandler = (requestHandler) => {
-    (req, res, next) => {
+    return (req, res, next) => {
         Promise.resolve(requestHandler(req, res, next)).
         catch((err) => next(err))
     }    //return statement
