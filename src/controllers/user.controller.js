@@ -1,10 +1,25 @@
 //written an helper file in asynchandler as a wrapper
 import { asyncHandler } from "../utils/asynHandler.js";
 import { ApiError } from "../utils/ApiError.js";
-import { User } from ".././models/UserModel.js"
-import { uploadOnCloudinary } from '../cloudinary/uploadToClodinary.js'
+import { User } from ".././models/user.model.js"
+import { uploadOnCloudinary } from '../utils/cloudinary.js'
 import { ApiResponse } from "../utils/ApiResponse.js";
 
+const generateAccessAndRefreshToken = async(userId) => {
+    try {
+        const user = User.findById(userId)
+        const accessToken = user.generateAccessToken()
+        const  refreshToken = user.generateRefreshToken()
+        
+        user.refreshToken = refreshToken
+        await user.save({vaidateBeforeSave:false}) //saving in db 
+
+        return {accessToken, refreshToken}
+
+    } catch (error) {
+        throw new ApiError(500 , "something went wrong while generating the token")
+    }
+}
 const registerUser = asyncHandler(async (req, res) => {
     //get user details from frontend
     const { fullName, email, username, password } = req.body
@@ -25,7 +40,12 @@ const registerUser = asyncHandler(async (req, res) => {
     }
     //check for images, check for avatar
     const avatarLocalPath = req.files?.avatar[0]?.path;
-    const coverImageLocalPath = req.files?.coverImage[0]?.path;
+    // const coverImageLocalPath = req.files?.coverImage[0]?.path;
+
+    let coverImageLocalPath;
+    if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0) {
+        coverImageLocalPath = req.coverImage[0].path
+    }
 
     if (!avatarLocalPath) {
         throw new ApiError(400, "Avatar is required!");
@@ -41,10 +61,10 @@ const registerUser = asyncHandler(async (req, res) => {
     const user = User.create({
         fullName,
         avatar: avatar.url,
-        coverImage:coverImage?.url || "", //corner case since it is not compulsory
+        coverImage: coverImage?.url || "", //corner case since it is not compulsory
         email,
         password,
-        username:username.toLowerCase()
+        username: username.toLowerCase()
     })
     //check for user creation & remove password and refresh token field from response
     const createdUser = await User.findById(user._id).select(
@@ -59,7 +79,82 @@ const registerUser = asyncHandler(async (req, res) => {
     )
 
 })
+//login a user
+const loginUser = asyncHandler(async (req, res) => {
+    // req body -> data
+    const { email, username, password } = req.body
+    //username or email
+    if (!username || !email) {
+        throw new ApiError(400, "Username/Email or Password is required!")
+    }
+    //find the user
+    const user = await User.findOne({
+        $or: [{ username }, { email }] //using the operator by mongoDB
+    })
+    if (!user) {
+        throw new ApiError(404, "user does not exist")
+    }
+    //password check - using bcrpyt
+    const isPasswordValid = await user.isPasswordCorrect(password) //we are not using the Mongoose "User"
+    if (!isPasswordValid) {
+        throw new ApiError(401, "Invalid credentials")
+    }
+    //access and refresh token 
+    const {accessToken, refreshToken} = await generateAccessAndRefreshToken(user._id)
 
-export { registerUser }
+    //things we want to sent to user(optional)
+    const loggedInUser = await User.findById(user._id).select("-password -refreshToken")
+    // send cookie
+    const options = {
+        httpOnly: true,
+        secure : true
+    }
+    return res
+    .status(200)
+    .cookie("accessToken",  accessToken ,options)
+    .cookie("refreshToken", refreshToken ,options)
+    .json(  
+        new ApiResponse(
+            200,
+            {
+                user: loggedInUser, accessToken, refreshToken
+            },
+            "Logged in successfully!"
+        ) //implementing this if a user new to save something in local file.
+    )
+  
+})
+  //logging out
+const logoutUser = asyncHandler(async(req, res) => {
+    await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            $set:{
+                refreshToken: undefined
+            }
+        },
+        {
+            new:true
+        }
+    )
+    const options = {
+        httpOnly: true,
+        secure : true
+    }
+    return res
+    .status(200)
+    .clearCookie('accessToken', options)
+    .clearCookie('refreshToken', options)
+    .json(new ApiResponse(200, {}, "User loggedout successfully"))
+
+
+})
+
+export {
+    registerUser,
+    loginUser,
+    logoutUser
+
+}
 
 //we have created a method, so to run this method we to create routes.
