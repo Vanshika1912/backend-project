@@ -5,6 +5,7 @@ import { User } from ".././models/user.model.js"
 import { uploadOnCloudinary } from '../utils/cloudinary.js'
 import { ApiResponse } from "../utils/ApiResponse.js";
 
+
 const generateAccessAndRefreshToken = async(userId) => {
     try {
         const user = User.findById(userId)
@@ -84,7 +85,7 @@ const loginUser = asyncHandler(async (req, res) => {
     // req body -> data
     const { email, username, password } = req.body
     //username or email
-    if (!username || !email) {
+    if (!username && !email) {
         throw new ApiError(400, "Username/Email or Password is required!")
     }
     //find the user
@@ -149,6 +150,26 @@ const logoutUser = asyncHandler(async(req, res) => {
 
 
 })
+
+// const RefreshAccessToken = asyncHandler(async(req, res) => {
+//     const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken
+//     if (!incomingRefreshToken){
+//         throw new ApiError(401, "unauthorized request!")
+//     }
+//     if (incomingRefreshToken) {
+//         throw new ApiError(401, "unauthorized request")
+//     //verifying the incomming token
+//     const decodedToken = jwt.verify(
+//         incomingRefreshToken,
+//         process.env.REFRESH_TOKEN_SECRET
+//     )
+//     User.findById
+//     //payload is an optional thing, 
+    
+//     }
+
+//  })
+
 
 export {
     registerUser,
